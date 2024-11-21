@@ -1,0 +1,14 @@
+#AI
+onnxruntime==1.17.3
+
+#GUI
+streamlit==1.32.1
+
+
+#UTILS
+numpy==1.26.4
+moviepy==1.0.3
+opencv-python-headless
+natsort
+pyinstaller==6.9.0
+Pillow
