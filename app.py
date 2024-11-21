@@ -113,11 +113,15 @@ def initialize_session_state():
         st.session_state.upscaler = None
     if 'processing_status' not in st.session_state:
         st.session_state.processing_status = ""
+    if 'processed_gif' not in st.session_state:
+        st.session_state.processed_gif = None
+    if 'current_file' not in st.session_state:
+        st.session_state.current_file = None
 
 def create_sidebar() -> dict:
     """Create and return sidebar settings"""
     with st.sidebar:
-        st.title("RealScaler Settings")
+        st.title("Image Enhancer Settings")
 
         # Device Selection
         device = st.radio(
@@ -237,7 +241,7 @@ def process_gif(gif_path: str, settings: dict) -> BytesIO:
 
 def set_page_config():
     st.set_page_config(
-        page_title="Image Enhancer",
+        page_title="Image Enhancer Prototype",
         page_icon="🎨",
         layout="wide",
         initial_sidebar_state="expanded"
@@ -246,41 +250,46 @@ def set_page_config():
     # Custom CSS for styling
     st.markdown("""
         <style>
+        /* Add button text color style */
+        .stDownloadButton>button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 0.6em 1.2em;
+            border: none;
+            border-radius: 4px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        /* Hide deployment bar */
+        header[data-testid="stHeader"] {
+            display: none;
+        }
         .main {
-            padding: 0rem 1rem;
+            background-color: #f7f7f7;
+            color: #000000;
         }
         .stApp {
-            background-color: #00264D;
+            background-color: #FFFFFF;
         }
-        .company-logos {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1rem 0;
+        
+        h1, h2, h3, h4, h5, h6 {
+            color: #000000 !important;
         }
-        .model-card {
-            background-color: white;
-            padding: 1.5rem;
-            border-radius: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 1rem;
+        
+        p {
+            color: #000000;
         }
-        .feature-list {
-            list-style-type: none;
-            padding-left: 0;
+        
+        .stMarkdown {
+            color: #000000;
         }
-        .feature-item {
-            margin-bottom: 0.5rem;
-            padding-left: 1.5rem;
-            position: relative;
+        
+        /* Keep sidebar styling */
+        [data-testid="stSidebar"] {
+            background-color: #f8f9fa;
         }
-        .feature-item:before {
-            content: "✓";
-            position: absolute;
-            left: 0;
-            color: #28a745;
-        }
-        </style>
+        
     """, unsafe_allow_html=True)
     
 def create_header():
@@ -291,7 +300,7 @@ def create_header():
         st.image("images/animately.jpeg", width=150)
     
     with col2:
-        st.title("Image Enhancer")
+        st.header("Image Enhancer Prototype")
         st.markdown("*Powered by Advanced AI Upscaling Technology*")
     
     with col3:
@@ -310,10 +319,23 @@ def main():
     uploaded_file = st.file_uploader(
         "Upload a GIF to upscale",
         type=SUPPORTED_GIF_TYPE,
-        help="Select a GIF file to upscale"
+        help="Select a GIF file to upscale (max 500KB)", 
     )
     
     if uploaded_file:
+        
+        file_size = len(uploaded_file.getvalue()) / 1024  # Size in KB
+        if file_size > 500:
+            st.error("File size exceeds 500KB limit. Please upload a smaller file.")
+            return
+        
+        # Check if we need to process a new file
+        new_file = (st.session_state.current_file != uploaded_file.name)
+        
+        if new_file:
+            st.session_state.current_file = uploaded_file.name
+            st.session_state.processed_gif = None
+        
         # Create columns for before/after comparison
         col1, col2 = st.columns(2)
         
@@ -323,50 +345,55 @@ def main():
         
         with col2:
             st.markdown("### Upscaled")
-            with st.spinner("Processing GIF..."):
-                try:
-                    # Save uploaded GIF temporarily
-                    with tempfile.NamedTemporaryFile(delete=False, suffix='.gif') as tmp_file:
-                        tmp_file.write(uploaded_file.getvalue())
-                        temp_path = tmp_file.name
-                    
-                    # Process GIF
-                    processed_gif_buffer = process_gif(temp_path, settings)
-                    
-                    # Display processed GIF
-                    st.image(processed_gif_buffer, use_column_width=True)
-                    
-                    # Add download button
-                    st.download_button(
-                        label="Download upscaled GIF",
-                        data=processed_gif_buffer,
-                        file_name=f"upscaled_{uploaded_file.name}",
-                        mime="image/gif"
-                    )
-                    
-                except Exception as e:
-                    st.error(f"Error processing GIF: {str(e)}")
-                finally:
-                    # Cleanup
-                    if 'temp_path' in locals():
-                        os.unlink(temp_path)
-                    if st.session_state.upscaler:
-                        st.session_state.upscaler.cleanup()
-                        st.session_state.upscaler = None
-                    gc.collect()
+            if new_file:
+                with st.spinner("Processing GIF..."):
+                    try:
+                        # Save uploaded GIF temporarily
+                        with tempfile.NamedTemporaryFile(delete=False, suffix='.gif') as tmp_file:
+                            tmp_file.write(uploaded_file.getvalue())
+                            temp_path = tmp_file.name
+                        
+                        # Process GIF
+                        processed_gif_buffer = process_gif(temp_path, settings)
+                        st.session_state.processed_gif = processed_gif_buffer
+                        
+                        # # Display processed GIF
+                        # st.image(processed_gif_buffer, use_column_width=True)
+                        
+                        # # Add download button
+                        # st.download_button(
+                        #     label="Download upscaled GIF",
+                        #     data=processed_gif_buffer,
+                        #     file_name=f"upscaled_{uploaded_file.name}",
+                        #     mime="image/gif"
+                        # )
+                        
+                    except Exception as e:
+                        st.error(f"Error processing GIF: {str(e)}")
+                    finally:
+                        # Cleanup
+                        if 'temp_path' in locals():
+                            os.unlink(temp_path)
+                        if st.session_state.upscaler:
+                            st.session_state.upscaler.cleanup()
+                            st.session_state.upscaler = None
+                        gc.collect()
+                        
+            if st.session_state.processed_gif:
+                st.image(st.session_state.processed_gif, use_column_width=True)
+                st.download_button(
+                    label="Download upscaled GIF",
+                    data=st.session_state.processed_gif,
+                    file_name=f"upscaled_{uploaded_file.name}",
+                    mime="image/gif"
+                )
 
     st.markdown("---")
     st.markdown("""
-    ### About Image Enhancer
+    ### About Image Enhancer Prototype
     
     Image Enhancer is a professional-grade image upscaling solution developed by Ampcome for Animately. 
     It uses state-of-the-art AI models to enhance image resolution while maintaining quality.
-    
-    #### Key Features:
-    - Advanced AI-powered upscaling
-    - Support for multiple image formats
-    - Professional-grade enhancement
-    - Specialized models for different types of content
     
     *Built with ❤️ by [Ampcome](https://ampcome.com) for [Animately](https://animately.co)*
     """)
